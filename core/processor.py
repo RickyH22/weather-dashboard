@@ -1,36 +1,61 @@
 # core/processor.py
-"""Data processing module"""
+"""Data processing for weather information"""
 
-from typing import Dict, List
-import statistics
+from typing import Dict, List, Any
+from statistics import mean
 
 class DataProcessor:
-    """Processes and analyzes weather data"""
+    """Handles processing and analysis of weather data"""
     
-    def process_api_response(self, data: Dict) -> Dict:
-        """Convert API response to internal format"""
-        if not data:
-            return {}
-            
-        return {
-            'city': data.get('name', 'Unknown'),
-            'temperature': round(data.get('main', {}).get('temp', 0)),
-            'feels_like': round(data.get('main', {}).get('feels_like', 0)),
-            'humidity': data.get('main', {}).get('humidity', 0),
-            'description': data.get('weather', [{}])[0].get('description', ''),
-            'wind_speed': data.get('wind', {}).get('speed', 0)
-        }
-    
-    def calculate_statistics(self, history: List[Dict]) -> Dict:
-        """Calculate statistics from weather history"""
-        if not history:
-            return {}
-            
-        temps = [h['temperature'] for h in history]
+    def process_api_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Extract relevant weather information from API response
         
-        return {
-            'average': round(statistics.mean(temps), 1),
-            'minimum': min(temps),
-            'maximum': max(temps),
-            'trend': 'rising' if temps[-1] > temps[0] else 'falling'
-        }
+        Args:
+            response: Raw API response
+            
+        Returns:
+            Dictionary with processed weather information
+        """
+        try:
+            return {
+                'temperature': round(response['main']['temp'], 1),
+                'feels_like': round(response['main']['feels_like'], 1),
+                'humidity': response['main']['humidity'],
+                'description': response['weather'][0]['description'],
+                'wind_speed': response['wind']['speed'],
+                'city': response['name'],
+                'country': response['sys']['country']
+            }
+        except KeyError as e:
+            print(f"Error processing API response: Missing key {e}")
+            return {}
+    
+    def calculate_statistics(self, history: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Calculate statistics from historical weather data
+        
+        Args:
+            history: List of historical weather data
+            
+        Returns:
+            Dictionary with statistical information
+        """
+        if not history or len(history) < 2:
+            return {'error': 'Not enough data for statistics'}
+        
+        try:
+            temperatures = [entry['temperature'] for entry in history]
+            humidities = [entry['humidity'] for entry in history]
+            
+            return {
+                'avg_temp': round(mean(temperatures), 1),
+                'min_temp': round(min(temperatures), 1),
+                'max_temp': round(max(temperatures), 1),
+                'avg_humidity': round(mean(humidities), 1),
+                'data_points': len(history)
+            }
+        except KeyError as e:
+            return {'error': f'Missing data in history: {e}'}
+        except Exception as e:
+            return {'error': f'Error calculating statistics: {e}'}

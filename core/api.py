@@ -12,7 +12,7 @@ class WeatherAPI:
         self.base_url = "https://api.openweathermap.org/data/2.5/weather"
         self.timeout = 10
     
-    def fetch_weather(self, city: str) -> Optional[Dict]:
+    def fetch_weather(self, city: str) -> Dict:
         """
         Fetch weather data for a city
         
@@ -26,15 +26,21 @@ class WeatherAPI:
             params = {
                 'q': city,
                 'appid': self.api_key,
-                'units': 'imperial'
+                'units': 'imperial'  # For Fahrenheit
             }
+            
             response = requests.get(
-                self.base_url, 
-                params=params, 
+                self.base_url,
+                params=params,
                 timeout=self.timeout
             )
-            response.raise_for_status()
-            return response.json()
-        except requests.RequestException as e:
-            print(f"API Error: {e}")
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                print(f"API Error: {response.status_code}")
+                return None
+                
+        except Exception as e:
+            print(f"Error fetching weather: {e}")
             return None
