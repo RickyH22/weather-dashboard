@@ -18,3 +18,5 @@ weather_history.json
 # Virtual environment
 venv/
 env/
+
+OPENWEATHERMAP_API_KEY=fcd917863c4d493d670641fd9c1bb9a7

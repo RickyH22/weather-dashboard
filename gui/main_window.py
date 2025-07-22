@@ -2,6 +2,7 @@
 """Main application window"""
 
 import tkinter as tk
+from tkinter import ttk
 from typing import Callable, Dict
 
 class MainWindow:
@@ -15,19 +16,21 @@ class MainWindow:
         # Callbacks storage
         self.callbacks: Dict[str, Callable] = {}
         
-        self.setup_ui()
-    
-    def setup_ui(self):
-        """Initialize UI components"""
         # Create frames
-        self.header_frame = tk.Frame(self.root, bg='#2196F3', height=100)
-        self.header_frame.pack(fill=tk.X)
+        self.header_frame = ttk.Frame(self.root, padding="10")
+        self.header_frame.grid(row=0, column=0, sticky=(tk.W, tk.E))
         
-        self.content_frame = tk.Frame(self.root)
-        self.content_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        self.content_frame = ttk.Frame(self.root, padding="10")
+        self.content_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
-        self.feature_frame = tk.Frame(self.root)
-        self.feature_frame.pack(fill=tk.X, padx=20, pady=10)
+        # Add features frame
+        self.features_frame = ttk.Frame(self.root, padding="10")
+        self.features_frame.grid(row=2, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # Configure grid weights
+        self.root.columnconfigure(0, weight=1)
+        self.root.rowconfigure(1, weight=1)
+        self.root.rowconfigure(2, weight=1)  # Give weight to features frame
     
     def register_callback(self, event: str, callback: Callable):
         """Register event callbacks"""
