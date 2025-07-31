@@ -7,6 +7,8 @@ from tkinter import messagebox
 from gui.main_window import MainWindow
 from gui.components import SearchBar, WeatherDisplay
 from features.city_comparison import CityComparison
+from features.temperature_graph import TemperatureGraph
+from features.theme_switcher import ThemeSwitcher
 
 class AppController:
     """Controls the GUI components and handles events"""
@@ -25,18 +27,28 @@ class AppController:
         
     def setup_ui(self):
         """Set up the user interface"""
-        # Add search bar
+        # Add search and theme switcher to header (always visible)
         self.search_bar = SearchBar(self.window.header_frame, self.on_search)
+        self.theme_switcher = ThemeSwitcher(self.window.header_frame, self.window.root)
         
-        # Add weather display
+        # Add weather display to main content tab
         self.weather_display = WeatherDisplay(self.window.content_frame)
         
-        # Add city comparison feature
+        # Add city comparison feature to its tab
         self.comparison = CityComparison(
-            self.window.features_frame,  # You'll need to add this frame to your MainWindow
-            self.api.fetch_weather,      # Pass the API fetch method
-            self.processor.process_api_response  # Pass the processor method
+            self.window.features_frame,
+            self.api.fetch_weather,
+            self.processor.process_api_response
         )
+        
+        # Add temperature graph to its tab
+        self.temp_graph = TemperatureGraph(
+            self.window.graphs_frame,
+            self.storage.get_all_weather
+        )
+        
+        # Register for tab change events
+        self.window.register_callback("tab_changed", self.on_tab_changed)
     
     def on_search(self, city):
         """Handle search event"""
@@ -71,6 +83,17 @@ class AppController:
                 messagebox.showerror("Error", f"Could not find weather data for '{city}'")
         except Exception as e:
             messagebox.showerror("Search Error", f"An error occurred: {str(e)}")
+    
+    def on_tab_changed(self, tab_name):
+        """Handle tab changes to update content as needed"""
+        print(f"Switched to {tab_name} tab")
+        
+        # Refresh tab content as needed
+        if tab_name == "Temperature Trends":
+            self.temp_graph.update_city_list()
+        elif tab_name == "City Comparison":
+            # Anything that needs refreshing in comparison tab
+            pass
     
     def start(self):
         """Start the application window"""

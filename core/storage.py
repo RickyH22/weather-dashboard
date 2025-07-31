@@ -73,3 +73,14 @@ class StorageManager:
         except Exception as e:
             print(f"Error loading weather history: {e}")
             return []
+    
+    def get_all_weather(self):
+        """Get all stored weather data"""
+        try:
+            if os.path.exists(self.filename):
+                with open(self.filename, 'r') as file:
+                    return json.load(file)
+            return {}
+        except Exception as e:
+            print(f"Error retrieving weather data: {e}")
+            return {}
