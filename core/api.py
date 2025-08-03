@@ -3,8 +3,9 @@
 
 import os
 import requests
-from typing import Dict, Any
+from typing import Dict, Any, List
 from dotenv import load_dotenv
+from datetime import datetime
 
 load_dotenv()  # Load environment variables
 print("API key:", os.getenv("OPENWEATHERMAP_API_KEY"))
@@ -76,3 +77,166 @@ class WeatherAPI:
         except Exception as e:
             print(f"Unexpected error fetching weather: {e}")
             return None
+    
+    def fetch_historical_weather(self, city: str, days: int = 7) -> List[Dict[str, Any]]:
+        """
+        Fetch historical weather data for a city
+        
+        Args:
+            city: City name to get history for
+            days: Number of days of history to get
+            
+        Returns:
+            List of daily weather data points
+        """
+        # Since OpenWeatherMap's historical API requires paid subscription,
+        # we'll use the 5-day/3-hour forecast API which is free
+        params = {
+            'q': city,
+            'appid': self.api_key,
+            'units': 'imperial',  # For Fahrenheit
+            'cnt': days * 8  # Get data points for requested days (8 points per day)
+        }
+        
+        try:
+            response = requests.get(
+                "https://api.openweathermap.org/data/2.5/forecast",
+                params=params,
+                timeout=self.timeout
+            )
+            
+            # Handle HTTP errors
+            response.raise_for_status()
+            
+            # Process the data to get daily readings
+            data = response.json()
+            
+            if 'list' not in data:
+                print("Invalid response format")
+                return []
+                
+            # Extract daily data (take first reading of each day)
+            daily_data = []
+            days_added = set()
+            
+            for item in data['list']:
+                # Convert timestamp to date string
+                timestamp = item['dt']
+                date = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d')
+                
+                # Only take first reading for each day
+                if date in days_added:
+                    continue
+                    
+                days_added.add(date)
+                
+                # Add the data point
+                daily_data.append({
+                    'date': date,
+                    'temperature': item['main']['temp'],
+                    'humidity': item['main']['humidity'],
+                    'description': item['weather'][0]['description'],
+                    'wind_speed': item['wind']['speed']
+                })
+                
+                # Stop once we have enough days
+                if len(daily_data) >= days:
+                    break
+                    
+            return daily_data
+            
+        except Exception as e:
+            print(f"Error fetching historical data: {e}")
+            return []
+    
+    def fetch_forecast(self, city: str) -> Dict[str, Any]:
+        """
+        Fetch 7-day weather forecast for a city
+        
+        Args:
+            city: City name to get forecast for
+            
+        Returns:
+            Dictionary with forecast data
+        """
+        try:
+            # Use the 5-day/3-hour forecast API (free tier)
+            params = {
+                'q': city,
+                'appid': self.api_key,
+                'units': 'imperial'  # For Fahrenheit
+            }
+            
+            response = requests.get(
+                "https://api.openweathermap.org/data/2.5/forecast",
+                params=params,
+                timeout=self.timeout
+            )
+            
+            # Handle HTTP errors
+            response.raise_for_status()
+            
+            # Process the data
+            data = response.json()
+            
+            if 'list' not in data:
+                print("Invalid response format")
+                return {}
+            
+            # Convert the 3-hour forecasts into daily forecasts
+            daily_forecasts = self._process_forecast_data(data['list'])
+            
+            return {
+                'city': data.get('city', {}),
+                'daily': daily_forecasts
+            }
+            
+        except requests.exceptions.RequestException as e:
+            print(f"API request error for {city}: {e}")
+            return {}
+        except Exception as e:
+            print(f"Error fetching forecast for {city}: {e}")
+            return {}
+
+    def _process_forecast_data(self, forecast_list: List[Dict]) -> List[Dict]:
+        """
+        Process 3-hour forecast data into daily forecasts
+        
+        Args:
+            forecast_list: List of 3-hour forecast data points
+            
+        Returns:
+            List of daily forecast dictionaries
+        """
+        daily_data = {}
+        
+        for item in forecast_list:
+            # Get the date for this forecast item
+            timestamp = item['dt']
+            date = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d')
+            
+            if date not in daily_data:
+                daily_data[date] = {
+                    'dt': timestamp,
+                    'temp': {'max': float('-inf'), 'min': float('inf')},
+                    'weather': item['weather'],
+                    'temps': []  # Store all temps to calculate average
+                }
+            
+            # Update min/max temperatures
+            temp = item['main']['temp']
+            daily_data[date]['temps'].append(temp)
+            daily_data[date]['temp']['max'] = max(daily_data[date]['temp']['max'], temp)
+            daily_data[date]['temp']['min'] = min(daily_data[date]['temp']['min'], temp)
+        
+        # Convert to list and limit to 7 days
+        result = []
+        for date in sorted(daily_data.keys())[:7]:
+            day_data = daily_data[date]
+            result.append({
+                'dt': day_data['dt'],
+                'temp': day_data['temp'],
+                'weather': day_data['weather']
+            })
+        
+        return result

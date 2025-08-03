@@ -9,6 +9,8 @@ from gui.components import SearchBar, WeatherDisplay
 from features.city_comparison import CityComparison
 from features.temperature_graph import TemperatureGraph
 from features.theme_switcher import ThemeSwitcher
+from features.weather_poetry import WeatherPoetry
+from features.team_feature import TeamFeature
 
 class AppController:
     """Controls the GUI components and handles events"""
@@ -41,11 +43,21 @@ class AppController:
             self.processor.process_api_response
         )
         
-        # Add temperature graph to its tab
+        # Add temperature graph feature (7-day forecast)
         self.temp_graph = TemperatureGraph(
             self.window.graphs_frame,
-            self.storage.get_all_weather
+            self.api.fetch_forecast,  # This connects to your API forecast method
+            None  # No storage needed for forecast data
         )
+        
+        # Add weather poetry feature
+        self.weather_poetry = WeatherPoetry(
+            self.window.poetry_frame,
+            self.api.fetch_weather  # Use your existing fetch_weather method
+        )
+        
+        # Add team feature
+        self.team_feature = TeamFeature(self.window.team_frame)
         
         # Register for tab change events
         self.window.register_callback("tab_changed", self.on_tab_changed)

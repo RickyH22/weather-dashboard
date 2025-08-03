@@ -3,7 +3,7 @@
 
 import tkinter as tk
 from tkinter import ttk
-from typing import Callable, Dict
+from typing import Dict, Callable
 
 class MainWindow:
     """Main application window"""
@@ -28,33 +28,32 @@ class MainWindow:
         self.content_frame = ttk.Frame(self.notebook, padding="10")
         self.features_frame = ttk.Frame(self.notebook, padding="10")
         self.graphs_frame = ttk.Frame(self.notebook, padding="10")
-        self.settings_frame = ttk.Frame(self.notebook, padding="10")
+        self.team_frame = ttk.Frame(self.notebook, padding="10")  # Team tab
+        self.poetry_frame = ttk.Frame(self.notebook, padding="10")
         
         # Add the frames as tabs
         self.notebook.add(self.content_frame, text="Current Weather")
         self.notebook.add(self.features_frame, text="City Comparison")
-        self.notebook.add(self.graphs_frame, text="Temperature Trends")
-        self.notebook.add(self.settings_frame, text="Settings")
+        self.notebook.add(self.graphs_frame, text="5-Day Forecast")  # Updated from "7-Day Forecast"
+        self.notebook.add(self.team_frame, text="Team")  # Add Team tab
+        self.notebook.add(self.poetry_frame, text="Weather Poetry")
         
         # Style the tabs to make them bigger and centered
         self.style = ttk.Style()
         
         # Make tabs larger with more padding
-        self.style.configure("TNotebook.Tab", padding=[20, 10], font=('Arial', 12))
+        self.style.configure("TNotebook.Tab", padding=[30, 10], font=('Arial', 11, 'bold'))
         
-        # Center the tabs
+        # Configure the notebook for equal tab spacing
         self.style.configure("TNotebook", tabposition='n')
-        
-        # Add some margin around the notebook to center tabs
-        self.notebook.pack_propagate(0)
-        
-        # Configure grid weights
+    
+        # Configure grid weights - THIS IS CRITICAL
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(1, weight=1)
         
         # Bind tab change event
         self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
-        
+    
     def register_callback(self, event: str, callback: Callable):
         """Register event callbacks"""
         self.callbacks[event] = callback

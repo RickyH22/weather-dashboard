@@ -5,23 +5,25 @@ from tkinter import ttk, messagebox
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from typing import Dict, Any, List, Callable
-from datetime import datetime, timedelta
-import random  # For demo data only
+from datetime import datetime
 
 class TemperatureGraph:
     """Displays temperature trends over time"""
     
-    def __init__(self, parent, storage_callback: Callable):
+    def __init__(self, parent, api_callback: Callable, storage_callback: Callable = None):
         """
         Initialize temperature graph feature
         
         Args:
             parent: Parent frame to place the graph
-            storage_callback: Function to retrieve weather history data
+            api_callback: Function to fetch historical weather data
+            storage_callback: Optional function to retrieve cached weather history
         """
         self.parent = parent
+        self.api_callback = api_callback
         self.storage_callback = storage_callback
         self.current_city = None
+        self.data_source = tk.StringVar(value="api")  # "api" or "storage"
         
         # Create widgets
         self.create_widgets()
@@ -38,21 +40,28 @@ class TemperatureGraph:
         # City selection
         ttk.Label(controls_frame, text="City:").pack(side=tk.LEFT, padx=5)
         self.city_var = tk.StringVar()
-        self.city_combo = ttk.Combobox(controls_frame, textvariable=self.city_var, width=20)
-        self.city_combo.pack(side=tk.LEFT, padx=5)
-        self.city_combo.bind("<<ComboboxSelected>>", lambda e: self.update_graph())
+        self.city_entry = ttk.Entry(controls_frame, textvariable=self.city_var, width=20)
+        self.city_entry.pack(side=tk.LEFT, padx=5)
+        self.city_entry.bind("<Return>", lambda e: self.update_graph())
         
         # Time range selection
         ttk.Label(controls_frame, text="Range:").pack(side=tk.LEFT, padx=(15, 5))
-        self.range_var = tk.StringVar(value="7 days")
+        self.range_var = tk.StringVar(value="7")
         range_combo = ttk.Combobox(controls_frame, textvariable=self.range_var, 
-                                  values=["7 days", "14 days", "30 days"], width=10)
+                                  values=["5", "7", "14"], width=5)
         range_combo.pack(side=tk.LEFT, padx=5)
-        range_combo.bind("<<ComboboxSelected>>", lambda e: self.update_graph())
         
-        # Refresh button
-        refresh_btn = ttk.Button(controls_frame, text="Refresh", command=self.update_graph)
-        refresh_btn.pack(side=tk.RIGHT, padx=5)
+        # Data source selection (API or Storage)
+        data_frame = ttk.Frame(controls_frame)
+        data_frame.pack(side=tk.LEFT, padx=15)
+        ttk.Radiobutton(data_frame, text="Live API Data", 
+                       variable=self.data_source, value="api").pack(side=tk.TOP, anchor=tk.W)
+        ttk.Radiobutton(data_frame, text="Stored Data", 
+                       variable=self.data_source, value="storage").pack(side=tk.TOP, anchor=tk.W)
+        
+        # Update button
+        update_btn = ttk.Button(controls_frame, text="Update Graph", command=self.update_graph)
+        update_btn.pack(side=tk.RIGHT, padx=5)
         
         # Create matplotlib figure and canvas
         self.figure, self.ax = plt.subplots(figsize=(8, 4), dpi=100)
@@ -60,116 +69,106 @@ class TemperatureGraph:
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True, pady=10)
         
         # Initial message
-        self.ax.text(0.5, 0.5, "Select a city to view temperature trends", 
+        self.ax.text(0.5, 0.5, "Enter a city and click Update Graph", 
                     ha='center', va='center', fontsize=12)
         self.ax.axis('off')
-        
-        # Update city list
-        self.update_city_list()
-        
-    def update_city_list(self):
-        """Update the list of cities in the combobox"""
-        try:
-            # Get all cities from storage
-            history = self.storage_callback()
-            cities = list(history.keys()) if history else []
-            
-            if not cities:
-                # Demo data if no cities are available
-                cities = ["New York", "London", "Tokyo", "Paris", "Sydney"]
-                
-            self.city_combo['values'] = cities
-            
-            # Select first city if available and none is selected
-            if cities and not self.city_var.get():
-                self.city_var.set(cities[0])
-                
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to load city list: {str(e)}")
     
     def update_graph(self):
-        """Update the temperature graph based on selected city and time range"""
-        city = self.city_var.get()
+        """Update the temperature graph with forecast data"""
+        city = self.city_var.get().strip()
         
         if not city:
+            messagebox.showinfo("Input Required", "Please enter a city name")
             return
             
         self.current_city = city
         self.ax.clear()
         
         try:
-            # Get the selected date range
-            range_text = self.range_var.get()
-            days = int(range_text.split()[0])  # Extract number from "X days"
-            
-            # Get weather history from storage
-            history = self.storage_callback()
-            
-            # Check if we have data for this city
-            if not history or city not in history or not history[city]:
-                # Generate demo data if no real data exists
-                self._generate_demo_data(city, days)
-                return
-                
-            # Get data for the selected city
-            city_data = history[city]
-            
-            # Extract dates and temperatures
-            dates = []
-            temperatures = []
-            
-            for entry in city_data[-days:]:  # Get last X days
-                dates.append(entry.get('date', ''))
-                temperatures.append(entry.get('temperature', 0))
-            
-            # Plot the data
-            self.ax.plot(dates, temperatures, 'o-', color='tab:blue', linewidth=2)
-            self.ax.set_title(f"Temperature Trends for {city} - Last {days} Days")
-            self.ax.set_xlabel("Date")
-            self.ax.set_ylabel("Temperature (°F)")
-            self.ax.grid(True, linestyle='--', alpha=0.7)
-            
-            # Format the x-axis to handle date strings better
-            plt.xticks(rotation=45)
-            plt.tight_layout()
-            
-            # Update the canvas
+            # Show loading message
+            self.ax.text(0.5, 0.5, f"Loading forecast for {city}...", 
+                        ha='center', va='center', fontsize=12)
             self.canvas.draw()
             
+            # Fetch forecast data
+            forecast_data = self.api_callback(city)
+            
+            if not forecast_data or 'daily' not in forecast_data or not forecast_data['daily']:
+                self.ax.clear()
+                self.ax.text(0.5, 0.5, f"No forecast data available for {city}\nTry a different city name", 
+                            ha='center', va='center', fontsize=12)
+                self.canvas.draw()
+                return
+                
+            daily_data = forecast_data['daily']
+            
+            # Extract data for plotting
+            dates = []
+            max_temps = []
+            min_temps = []
+            
+            for day in daily_data:
+                # Format date
+                timestamp = day['dt']
+                date_obj = datetime.fromtimestamp(timestamp)
+                dates.append(date_obj.strftime('%a\n%m/%d'))
+                
+                # Extract temperatures
+                max_temps.append(round(day['temp']['max']))
+                min_temps.append(round(day['temp']['min']))
+            
+            # Clear the loading message and create the plot
+            self.ax.clear()
+            
+            x_positions = range(len(dates))
+            
+            # Plot max and min temperatures
+            self.ax.plot(x_positions, max_temps, 'o-', 
+                        color='#FF6B35', linewidth=3, 
+                        markersize=8, label='High')
+            self.ax.plot(x_positions, min_temps, 'o-', 
+                        color='#004E89', linewidth=3, 
+                        markersize=8, label='Low')
+            
+            # Add temperature labels
+            for i, (max_temp, min_temp) in enumerate(zip(max_temps, min_temps)):
+                self.ax.annotate(f'{max_temp}°', 
+                               xy=(i, max_temp), 
+                               xytext=(0, 10), 
+                               textcoords='offset points',
+                               ha='center', va='bottom',
+                               fontweight='bold', fontsize=9)
+                self.ax.annotate(f'{min_temp}°', 
+                               xy=(i, min_temp), 
+                               xytext=(0, -15), 
+                               textcoords='offset points',
+                               ha='center', va='top',
+                               fontweight='bold', fontsize=9)
+            
+            # Customize the plot
+            self.ax.set_title(f"5-Day Forecast for {city.title()}", fontsize=14, fontweight='bold')
+            self.ax.set_xlabel("Date", fontsize=12)
+            self.ax.set_ylabel("Temperature (°F)", fontsize=12)
+            self.ax.set_xticks(x_positions)
+            self.ax.set_xticklabels(dates)
+            self.ax.grid(True, linestyle='--', alpha=0.3)
+            self.ax.legend(loc='upper right')
+            
+            # Set y-axis limits
+            all_temps = max_temps + min_temps
+            if all_temps:
+                temp_range = max(all_temps) - min(all_temps)
+                padding = max(temp_range * 0.1, 5)
+                self.ax.set_ylim(min(all_temps) - padding, max(all_temps) + padding)
+            
+            plt.tight_layout()
+            self.canvas.draw()
+            
+            print(f"Successfully displayed forecast for {city}")
+            
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to update graph: {str(e)}")
-            print(f"Graph error: {e}")
-    
-    def _generate_demo_data(self, city, days):
-        """Generate demo data for visualization when no real data exists"""
-        today = datetime.now()
-        dates = [(today - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)]
-        dates.reverse()  # So dates go from oldest to newest
-        
-        # Generate random temperatures between 50-80°F with some continuity
-        temp = 65  # Starting temperature
-        temperatures = []
-        for _ in range(days):
-            # Add some randomness but maintain continuity
-            change = random.uniform(-5, 5)
-            temp = max(min(temp + change, 85), 45)  # Keep between 45-85°F
-            temperatures.append(round(temp, 1))
-        
-        # Plot the demo data
-        self.ax.plot(dates, temperatures, 'o-', color='tab:orange', linewidth=2)
-        self.ax.set_title(f"Temperature Trends for {city} - Demo Data")
-        self.ax.set_xlabel("Date")
-        self.ax.set_ylabel("Temperature (°F)")
-        self.ax.grid(True, linestyle='--', alpha=0.7)
-        
-        # Add watermark for demo data
-        self.ax.text(0.5, 0.5, "DEMO DATA", 
-                    ha='center', va='center', color='red', alpha=0.2,
-                    fontsize=40, rotation=30, transform=self.ax.transAxes)
-        
-        # Format the x-axis
-        plt.xticks(rotation=45)
-        plt.tight_layout()
-        
-        # Update the canvas
-        self.canvas.draw()
+            self.ax.clear()
+            self.ax.text(0.5, 0.5, f"Error loading forecast for {city}\n{str(e)}", 
+                        ha='center', va='center', fontsize=12)
+            self.canvas.draw()
+            print(f"Forecast error: {e}")
